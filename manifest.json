@@ -1,0 +1,17 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "BoxTrack Pro",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "BoxTrack",
+  "start_url": "/",
+  "theme_color": "#F2F2F7",
+  "id": "/?source=pwa",
+  "description": "Smart Household Box, QR and Photo Inventory Management App for Family.",
+  "categories": [
+    "productivity",
+    "utilities"
+  ]
+}
