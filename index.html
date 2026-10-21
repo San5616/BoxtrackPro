@@ -5087,6 +5087,120 @@
 
     // Apply saved language on initial load
     window.applyLanguageToDOM();
+        // ============================================================================
+    // 16. AI PAPAJI ASSISTANT (Voice & Text Search Integration)
+    // ============================================================================
+    
+    // Inject AI Assistant Floating Box into Dashboard
+    function injectAiAssistantWidget() {
+      const dashboard = document.getElementById("section-dashboard");
+      if (!dashboard || document.getElementById("ai-assistant-card")) return;
+
+      const isHi = state.lang === "hi";
+      const aiCard = document.createElement("div");
+      aiCard.id = "ai-assistant-card";
+      aiCard.className = "card";
+      aiCard.style.cssText = "border: 1.5px solid var(--accent); background: var(--accent-soft); margin-top: 14px;";
+      
+      aiCard.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div style="font-size:13px; font-weight:800; color:var(--accent);">
+            🤖 ${isHi ? "स्मार्ट AI सहायक (Smart Assistant)" : "Smart AI Assistant"}
+          </div>
+          <button type="button" class="btn btn-sm btn-primary" style="padding:3px 8px; font-size:11px;" onclick="startAiVoiceQuery()">
+            🎤 ${isHi ? "बोलकर पूछें" : "Ask by Voice"}
+          </button>
+        </div>
+        <div class="input-with-btn" style="margin-bottom:6px;">
+          <input type="text" id="ai-query-input" class="input" placeholder="${isHi ? 'उदा. कम्बल कहाँ है? या दवाइयां...' : 'e.g., Where is the blanket?'}" style="font-size:13px; padding:8px 10px;" />
+          <button type="button" class="btn btn-primary btn-sm" style="padding:8px 12px;" onclick="processAiQuery()">🔍</button>
+        </div>
+        <div id="ai-response-box" style="font-size:12.5px; font-weight:600; color:var(--text); padding:6px 8px; background:var(--surface); border-radius:8px; display:none; margin-top:6px;"></div>
+      `;
+      dashboard.prepend(aiCard);
+    }
+
+    window.startAiVoiceQuery = function () {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        return showToast(state.lang === "hi" ? "आपका ब्राउज़र वॉइस कमांड सपोर्ट नहीं करता" : "Voice not supported");
+      }
+      const rec = new SpeechRec();
+      rec.lang = state.lang === "hi" ? "hi-IN" : "en-IN";
+      rec.interimResults = false;
+      showToast(state.lang === "hi" ? "🎤 सुन रहे हैं, बोलिए..." : "🎤 Listening...");
+      
+      rec.onresult = (ev) => {
+        const text = ev.results?.[0]?.[0]?.transcript || "";
+        const input = document.getElementById("ai-query-input");
+        if (input) input.value = text;
+        window.processAiQuery();
+      };
+      rec.onerror = () => showToast("Mic error");
+      rec.start();
+    };
+
+    window.processAiQuery = async function () {
+      const input = document.getElementById("ai-query-input");
+      const respBox = document.getElementById("ai-response-box");
+      if (!input || !respBox) return;
+
+      const queryText = input.value.trim().toLowerCase();
+      if (!queryText) return;
+
+      respBox.style.display = "block";
+      const isHi = state.lang === "hi";
+      respBox.textContent = isHi ? "ढूँढ रहे हैं..." : "Searching inventory...";
+
+      // Local Smart Inventory Match (Offline AI Engine)
+      const activeItems = getActiveItems();
+      const activeBoxes = getActiveBoxes();
+      
+      const matchedItem = activeItems.find(i => queryText.includes(i.name.toLowerCase()) || i.name.toLowerCase().includes(queryText));
+
+      let reply = "";
+      if (matchedItem) {
+        const box = activeBoxes.find(b => b.id === matchedItem.boxId);
+        const loc = box ? state.locations.find(l => l.id === box.locationId) : null;
+        const serial = box ? box.serialCode || box.id : "";
+        const rackInfo = box?.spotNote ? ` (Rack: ${box.spotNote})` : "";
+        
+        reply = isHi 
+          ? `✓ "${matchedItem.name}" (×${matchedItem.quantity}) ${box ? box.name : ''} में है। लोकेशन: ${loc ? loc.name : ''}${rackInfo} [Box #${serial}]`
+          : `✓ Found "${matchedItem.name}" (qty ${matchedItem.quantity}) inside box "${box ? box.name : ''}". Location: ${loc ? loc.name : ''}${rackInfo} [Box #${serial}]`;
+      } else {
+        // Check box match
+        const matchedBox = activeBoxes.find(b => queryText.includes(b.name.toLowerCase()) || b.name.toLowerCase().includes(queryText));
+        if (matchedBox) {
+          const loc = state.locations.find(l => l.id === matchedBox.locationId);
+          reply = isHi
+            ? `📦 बक्सा "${matchedBox.name}" (#${matchedBox.serialCode}) ${loc ? loc.name : ''} में रखा है।`
+            : `📦 Box "${matchedBox.name}" (#${matchedBox.serialCode}) is at ${loc ? loc.name : ''}.`;
+        } else {
+          reply = isHi 
+            ? "❌ माफ कीजिए, इस नाम का कोई सामान या बक्सा नहीं मिला। सही नाम बोलें।"
+            : "❌ Sorry, no matching item or box found.";
+        }
+      }
+
+      respBox.textContent = reply;
+
+      // Speak out answer for Papaji automatically
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(reply);
+        utter.lang = isHi ? "hi-IN" : "en-IN";
+        window.speechSynthesis.speak(utter);
+      }
+    };
+
+    // Hook into render dashboard
+    const oldRendDash = renderDashboard;
+    renderDashboard = function() {
+      oldRendDash();
+      injectAiAssistantWidget();
+    };
+
   </script>
 </body>
 </html>
