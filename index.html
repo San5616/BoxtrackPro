@@ -5289,6 +5289,129 @@ window.transferBox = async function (boxId) {
     if (history.state === null) {
       history.replaceState({ section: 'dashboard' }, "", "");
     }
+    // ============================================================================
+    // 17. SYNC & PRINT PREFILLED CATALOG AND CATEGORIES ACROSS HOUSEHOLDS
+    // ============================================================================
+
+    // 1. एक हाउसहोल्ड की आइटम लिस्ट दूसरे हाउसहोल्ड में कॉपी करने का फंक्शन
+    window.copyCatalogToAnotherHousehold = async function () {
+      const otherHhs = state.households.filter(h => h.id !== state.currentHouseholdId);
+      if (otherHhs.length === 0) {
+        return showToast("कोई दूसरा हाउसहोल्ड मौजूद नहीं है!");
+      }
+
+      const currentItems = getHouseholdPrefilledItems();
+      const namesList = otherHhs.map((h, i) => `${i + 1}. ${h.name}`).join("\n");
+      const choice = prompt(
+        `इस लिस्ट के सभी ${currentItems.length} आइटम्स को किस हाउसहोल्ड में कॉपी करना है?\nनीचे नंबर लिखें (जैसे 1):\n\n${namesList}`,
+        "1"
+      );
+      if (!choice) return;
+
+      const idx = parseInt(choice.trim(), 10) - 1;
+      const targetHh = otherHhs[idx] || otherHhs.find(h => h.name.toLowerCase() === choice.trim().toLowerCase());
+      if (!targetHh) return showToast("सही हाउसहोल्ड नहीं चुना गया!");
+
+      const existingItems = targetHh.prefilledItems?.length ? targetHh.prefilledItems : DEFAULT_PREFILLED_ITEMS;
+      const mergedItems = sortAlphabetically([...existingItems, ...currentItems]);
+
+      if (state.isDemo) {
+        const store = loadDemoStore();
+        const found = store.households.find(h => h.id === targetHh.id);
+        if (found) found.prefilledItems = mergedItems;
+        saveDemoStore(store);
+        syncDemoState();
+      } else {
+        await updateDoc(doc(db, "households", targetHh.id), { prefilledItems: mergedItems });
+      }
+
+      showToast(`✓ आइटम्स सफलतापूर्वक "${targetHh.name}" में कॉपी हो गए!`);
+    };
+
+    // 2. एक हाउसहोल्ड की कैटेगरीज दूसरे हाउसहोल्ड में कॉपी करने का फंक्शन
+    window.copyCategoriesToAnotherHousehold = async function () {
+      const otherHhs = state.households.filter(h => h.id !== state.currentHouseholdId);
+      if (otherHhs.length === 0) {
+        return showToast("कोई दूसरा हाउसहोल्ड मौजूद नहीं है!");
+      }
+
+      const currentCats = getHouseholdCategories();
+      const namesList = otherHhs.map((h, i) => `${i + 1}. ${h.name}`).join("\n");
+      const choice = prompt(
+        `इन सभी ${currentCats.length} कैटेगरीज को किस हाउसहोल्ड में कॉपी करना है?\nनीचे नंबर लिखें (जैसे 1):\n\n${namesList}`,
+        "1"
+      );
+      if (!choice) return;
+
+      const idx = parseInt(choice.trim(), 10) - 1;
+      const targetHh = otherHhs[idx] || otherHhs.find(h => h.name.toLowerCase() === choice.trim().toLowerCase());
+      if (!targetHh) return showToast("सही हाउसहोल्ड नहीं चुना गया!");
+
+      const existingCats = targetHh.categories?.length ? targetHh.categories : DEFAULT_CATEGORIES;
+      const mergedCats = sortAlphabetically([...existingCats, ...currentCats]);
+
+      if (state.isDemo) {
+        const store = loadDemoStore();
+        const found = store.households.find(h => h.id === targetHh.id);
+        if (found) found.categories = mergedCats;
+        saveDemoStore(store);
+        syncDemoState();
+      } else {
+        await updateDoc(doc(db, "households", targetHh.id), { categories: mergedCats });
+      }
+
+      showToast(`✓ कैटेगरीज सफलतापूर्वक "${targetHh.name}" में कॉपी हो गईं!`);
+    };
+
+    // 3. Prefilled Items (A-Z) की लिस्ट प्रिंट करने का फंक्शन
+    window.printPrefilledCatalog = function () {
+      const hh = getCurrentHousehold();
+      const items = getHouseholdPrefilledItems();
+      const w = window.open("", "", "height=650,width=800");
+      w.document.write(`<html><head><title>Prefilled Items List</title>
+        <style>
+          body { font-family: sans-serif; padding: 20px; }
+          h2 { margin-bottom: 5px; }
+          .meta { color: #555; font-size: 13px; margin-bottom: 15px; }
+          .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+          .item { border: 1px solid #ccc; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
+        </style>
+      </head><body>
+        <h2>⚡ Prefilled Items Catalog (A-Z)</h2>
+        <div class="meta">Household: <strong>${escapeHtml(hh ? hh.name : "")}</strong> | Total Items: <strong>${items.length}</strong></div>
+        <div class="grid">
+          ${items.map((it, idx) => `<div class="item"><strong>${idx + 1}.</strong> ${escapeHtml(it)}</div>`).join("")}
+        </div>
+      </body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 400);
+    };
+
+    // 4. Categories (A-Z) की लिस्ट प्रिंट करने का फंक्शन
+    window.printCategoryCatalog = function () {
+      const hh = getCurrentHousehold();
+      const cats = getHouseholdCategories();
+      const w = window.open("", "", "height=650,width=800");
+      w.document.write(`<html><head><title>Categories List</title>
+        <style>
+          body { font-family: sans-serif; padding: 20px; }
+          h2 { margin-bottom: 5px; }
+          .meta { color: #555; font-size: 13px; margin-bottom: 15px; }
+          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+          .item { border: 1px solid #ccc; padding: 8px 12px; border-radius: 4px; font-size: 14px; font-weight: bold; }
+        </style>
+      </head><body>
+        <h2>📂 Categories List (A-Z)</h2>
+        <div class="meta">Household: <strong>${escapeHtml(hh ? hh.name : "")}</strong> | Total Categories: <strong>${cats.length}</strong></div>
+        <div class="grid">
+          ${cats.map((c, idx) => `<div class="item">${idx + 1}. ${escapeHtml(c)}</div>`).join("")}
+        </div>
+      </body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(() => w.print(), 400);
+    };
 
     
   </script>
