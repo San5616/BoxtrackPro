@@ -6369,17 +6369,30 @@ window.transferBox = async function (boxId) {
         enhanceRenderedDOM();
       };
 
-      // Remember last selected household across app restarts
-      const origSwitchHh = window.switchHousehold;
-      window.switchHousehold = function (hhId) {
-        localStorage.setItem("boxtrack_last_hh", hhId);
-        origSwitchHh(hhId);
-      };
-      const savedHh = localStorage.getItem("boxtrack_last_hh");
-      if (savedHh) state.currentHouseholdId = savedHh;
+         // Remember last selected household & automatically trigger Firebase data load
+   const origSwitchHh = window.switchHousehold;
+   window.switchHousehold = function (hhId) {
+     localStorage.setItem("boxtrack_last_hh", hhId);
+     origSwitchHh(hhId);
+   };
 
-      enhanceRenderedDOM();
-    })();
+   // जब Firebase से households लोड हो जाएं, तब सही घर का डेटा ऑटोमैटिक लोड करें
+   let initialHhSynced = false;
+   const origRenderHh = renderHouseholdSwitcher;
+   renderHouseholdSwitcher = function () {
+     origRenderHh();
+     if (!initialHhSynced && state.households.length > 0) {
+       initialHhSynced = true;
+       const savedHh = localStorage.getItem("boxtrack_last_hh");
+       const targetId = (savedHh && state.households.some(h => h.id === savedHh))
+         ? savedHh
+         : state.households[0].id;
+       window.switchHousehold(targetId);
+     }
+   };
+
+   enhanceRenderedDOM();
+ })();
 
   </script>
 </body>
